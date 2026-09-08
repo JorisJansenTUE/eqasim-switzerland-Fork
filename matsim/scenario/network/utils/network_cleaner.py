@@ -302,7 +302,7 @@ class networkCleaner():
         progress_bar.close()
         return final_df, stats
 
-    def add_bike_to_network(self):
+    def add_bike_to_network_old(self):
         car_links = self.links.modes.str.split(',').map(lambda x: "car" in x)
         taxi_links = self.links.modes.str.split(',').map(lambda x: "taxi" in x)
         bus_links = self.links.modes.str.split(',').map(lambda x: "bus" in x)
@@ -349,19 +349,6 @@ class networkCleaner():
 
             return str(value).strip().lower()
         
-        def contains_golf_tag(attrs):
-            for key, value in attrs.items():
-                if not str(key).startswith("osm:way:"):
-                    continue
-
-                if "golf" in str(key).lower():
-                    return True
-
-                if value is not None and "golf" in str(value).lower():
-                    return True
-
-            return False
-
         def get_way_id(attrs):
             value = attrs.get("osm:way:id")
 
@@ -393,9 +380,6 @@ class networkCleaner():
             attrs = get_attributes(row)
 
             highway = get_tag(attrs, "highway")
-            bicycle = get_tag(attrs, "bicycle")
-            access = get_tag(attrs, "access")
-            tracktype = get_tag(attrs, "tracktype")
             way_id = get_way_id(attrs)
 
             # ----------------------------------------------------------
@@ -486,3 +470,79 @@ class networkCleaner():
         self.links = links.reset_index(drop=True)
 
         return self.links
+
+    def remove_unconnected_mode_links(self, mode):
+        df = self.links.copy()
+
+        # Links that allow this mode
+        mode_mask = df["modes"].str.split(",").map(
+            lambda modes: mode in modes
+        )
+
+        mode_links = df.loc[mode_mask].copy()
+
+        logger.info(
+            "Cleaning %s network: %d links",
+            mode,
+            len(mode_links),
+        )
+
+        # Directed modal graph
+        graph = nx.DiGraph()
+
+        graph.add_edges_from(
+            zip(
+                mode_links["from_node"],
+                mode_links["to_node"],
+            )
+        )
+
+        components = list(nx.strongly_connected_components(graph))
+
+        if not components:
+            logger.warning("No links found for mode %s", mode)
+            return df
+
+        largest_component = max(components, key=len)
+
+        # A link is retained for this mode only if both endpoints
+        # belong to the largest SCC.
+        keep_mode = (
+            mode_links["from_node"].isin(largest_component)
+            & mode_links["to_node"].isin(largest_component)
+        )
+
+        disconnected_ids = set(
+            mode_links.loc[~keep_mode].index
+        )
+
+        logger.info(
+            "%s network: removing mode from %d disconnected links",
+            mode,
+            len(disconnected_ids),
+        )
+
+        def remove_mode(row):
+            if row.name not in disconnected_ids:
+                return row["modes"]
+
+            modes = [
+                m for m in row["modes"].split(",")
+                if m != mode
+            ]
+
+            return ",".join(modes)
+
+        df["modes"] = df.apply(remove_mode, axis=1)
+
+        # Bike-only disconnected links now have no allowed modes
+        empty = df["modes"].str.len() == 0
+
+        logger.info(
+            "Removing %d links with no modes remaining",
+            empty.sum(),
+        )
+
+        df = df.loc[~empty].copy()
+
+        return df
