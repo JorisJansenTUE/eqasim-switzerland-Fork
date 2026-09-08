@@ -36,11 +36,13 @@ main*.py
 *.out
 *.err
 *.xlsx
+.venv/
 
 # Large geospatial data
 *.osm
 *.osm.gz
 *.pbf
+
 
 # Shapefiles and associated files
 *.shp
