@@ -1,0 +1,131 @@
+# ------------------------------------------------------------
+# Pipeline
+# ------------------------------------------------------------
+
+working_directory: /home/20201733/eqasim_cache/network_final
+
+dryrun: false
+
+run:
+  # Runs OSM conversion + network preprocessing + bike routing
+  # + PT schedule conversion + PT2MATSim mapping.
+  - matsim.scenario.network.mapped
+
+
+# ------------------------------------------------------------
+# Configuration
+# ------------------------------------------------------------
+
+config:
+
+  # ----------------------------------------------------------
+  # General
+  # ----------------------------------------------------------
+
+  data_path: /home/20201733/eqasim-switzerland-Fork/data
+
+  threads: 24
+  java_memory: 96G
+
+  # Population sampling rate.
+  # Also used by the capacity correction.
+  input_downsampling: 0.25
+
+
+  # ----------------------------------------------------------
+  # OSM network
+  # ----------------------------------------------------------
+
+  # Must be located in:
+  # <data_path>/osm/
+  osm_file: Switzerland-260413-bike.osm.pbf
+
+  border_offset: 20000
+
+  parseTurnRestrictions: true
+
+  # Required for detailed PT2MATSim geometry and useful for
+  # traffic-light matching.
+  export_detailed_network: true
+
+
+  # ----------------------------------------------------------
+  # Bicycle network
+  # ----------------------------------------------------------
+
+  # Existing eqasim step adds bike to the road network.
+  # Your modified cleaner subsequently removes disconnected
+  # bike components.
+  route_bike: true
+
+
+  # ----------------------------------------------------------
+  # Network cleaning
+  # ----------------------------------------------------------
+
+  # Must be true for the options below to actually run.
+  simplify_network_in_eqasim: true
+
+  remove_network_loops: true
+
+  # Keep these false because we want to preserve detailed
+  # road-space topology for the thesis interventions.
+  remove_replicate_links: false
+  remove_nodes_with_no_intersection: false
+
+  correct_speed: true
+  ensure_network_connectivity: true
+
+
+  # ----------------------------------------------------------
+  # Network attributes / realism
+  # ----------------------------------------------------------
+
+  correct_links_capacity: true
+
+  add_traffic_lights: true
+
+  # Recommended for Locarno because of the mountainous terrain.
+  # Preferably provide data/osm/elevations.csv.
+  assign_elevations: true
+
+  # Uses the elevation information.
+  adjust_speed_uphill: true
+
+  # Leave these heuristic corrections disabled.
+  adjust_speed_straightness: false
+  adjust_speed_mountain_links: false
+
+  capacity_factor_outside_border: 0.5
+
+  # Not relevant for the Locarno application.
+  include_tolls: false
+
+
+  # ----------------------------------------------------------
+  # Public transport
+  # ----------------------------------------------------------
+
+  # Use the standard eqasim Switzerland PT architecture.
+  pt_schedule: gtfs
+
+  # Folder inside <data_path>
+  gtfs_folder: gtfs
+
+  # Stock CMDP GTFS name.
+  # Change this if your ZIP has another name.
+  gtfs_name: gtfs_swiss_20260422
+
+  # Lets eqasim select the service day with the largest
+  # number of services.
+  gtfs_date: "dayWithMostServices"
+
+
+  # ----------------------------------------------------------
+  # Settings irrelevant to this network-only run
+  # ----------------------------------------------------------
+
+  include_external_population: false
+  cross_border_exclude_shapefiles:
+
+  municipality_type_source: data
