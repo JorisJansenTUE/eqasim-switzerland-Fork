@@ -146,7 +146,7 @@ class NetworkHandler:
             logger.info("Routing Bike...")
             self.net.links = networkCleaner(self.net).add_bike_to_network()
             logger.info("Removing unconnected bike links...")
-            self.net = networkCleaner(self.net).remove_unconnected_mode_links("bike")
+            self.net.links = networkCleaner(self.net).remove_unconnected_mode_links("bike")
 
     def _final_cleaning(self):
         logger.info("Final Cleaning of Network...")
