@@ -5,6 +5,8 @@ import networkx as nx
 from tqdm import tqdm
 import os
 import numpy as np
+import re
+
 
 import logging
 logger = logging.getLogger(__name__)
@@ -316,4 +318,171 @@ class networkCleaner():
 
         # Add bike to the modes of the selected links
         self.links.loc[bike_links, "modes"] += ",bike"
+        return self.links
+
+
+    def add_bike_to_network(self):
+        """
+        Assign bicycle access based on OSM tags instead of adding bike
+        indiscriminately to all motorised links.
+
+        Dedicated cycling infrastructure imported by PT2MATSim is retained
+        where appropriate, while normal roads are evaluated individually.
+        """
+
+        links = self.links.copy()
+
+        # Optional manual corrections for known OSM errors.
+        # Use OSM way IDs as strings.
+        FORCE_BIKE_WAYS = set()
+        FORCE_NO_BIKE_WAYS = set()
+
+        def get_attributes(row):
+            attrs = row["attributes"]
+            return attrs if isinstance(attrs, dict) else {}
+
+        def get_tag(attrs, key, default=""):
+            value = attrs.get(f"osm:way:{key}", default)
+
+            if value is None:
+                return default
+
+            return str(value).strip().lower()
+        
+        def contains_golf_tag(attrs):
+            for key, value in attrs.items():
+                if not str(key).startswith("osm:way:"):
+                    continue
+
+                if "golf" in str(key).lower():
+                    return True
+
+                if value is not None and "golf" in str(value).lower():
+                    return True
+
+            return False
+
+        def get_way_id(attrs):
+            value = attrs.get("osm:way:id")
+
+            if value is None:
+                return None
+
+            return str(value)
+
+        def get_maxspeed_kmh(row, attrs):
+            """
+            Prefer the original OSM maxspeed.
+            Fall back to the MATSim link freespeed.
+            """
+
+            raw = get_tag(attrs, "maxspeed")
+
+            if raw:
+                match = re.search(r"\d+(?:\.\d+)?", raw)
+
+                if match:
+                    return float(match.group())
+
+            try:
+                return float(row["freespeed"]) * 3.6
+            except (TypeError, ValueError):
+                return None
+
+        def bicycle_allowed(row):
+            attrs = get_attributes(row)
+
+            highway = get_tag(attrs, "highway")
+            bicycle = get_tag(attrs, "bicycle")
+            access = get_tag(attrs, "access")
+            tracktype = get_tag(attrs, "tracktype")
+            way_id = get_way_id(attrs)
+
+            # ----------------------------------------------------------
+            # Manual overrides
+            # ----------------------------------------------------------
+
+            if way_id in FORCE_BIKE_WAYS:
+                return True
+
+            if way_id in FORCE_NO_BIKE_WAYS:
+                return False
+
+           
+            # ----------------------------------------------------------
+            # Dedicated cycling infrastructure
+            # ----------------------------------------------------------
+
+            if highway in {
+                "cycleway",
+                "bike_suited",
+            }:
+                return True
+                
+            # ----------------------------------------------------------
+            # Roads that should not normally be used by bicycles
+            # ----------------------------------------------------------
+
+            if highway in {
+                "motorway",
+                "motorway_link",
+                "trunk",
+                "trunk_link",
+            }:
+                return False
+
+            # ----------------------------------------------------------
+            # Higher-order roads
+            # ----------------------------------------------------------
+
+            if highway in {
+                "primary",
+                "primary_link",
+                "secondary",
+                "secondary_link",
+            }:
+                maxspeed = get_maxspeed_kmh(row, attrs)
+
+                if maxspeed is not None and maxspeed > 60:
+                    return False
+
+                return True
+
+            # ----------------------------------------------------------
+            # Normal local road network
+            # ----------------------------------------------------------
+
+            if highway in {
+                "tertiary",
+                "tertiary_link",
+                "unclassified",
+                "residential",
+                "living_street",
+            }:
+                return True
+
+            # Unknown road class: do not assume bicycle access.
+            return False
+
+        def update_modes(row):
+            modes = {
+                mode.strip()
+                for mode in str(row["modes"]).split(",")
+                if mode.strip()
+            }
+
+            if bicycle_allowed(row):
+                modes.add("bike")
+            else:
+                modes.discard("bike")
+
+            return ",".join(sorted(modes))
+
+        links["modes"] = links.apply(update_modes, axis=1)
+
+        # Links such as rejected path/track candidates may now have no mode.
+        links = links[links["modes"] != ""].copy()
+
+        self.links = links.reset_index(drop=True)
+
         return self.links

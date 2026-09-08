@@ -74,6 +74,22 @@ def execute(context):
         else:
             param.set("value", str(value))
 
+    def add_way_default(osm_value,allowed_modes,freespeed,lane_capacity=600.0,lanes=1.0,oneway=False):
+        """
+        Add an OSM highway type that is not included in the
+        default PT2MATSim conversion configuration.
+        """
+        ps = etree.SubElement(osm_module,"parameterset",type="wayDefaultParams")
+
+        etree.SubElement(ps,"param",name="allowedTransportModes", value=allowed_modes)
+        etree.SubElement(ps,"param",name="freespeed",value=str(freespeed))
+        etree.SubElement(ps,"param",name="freespeedFactor",value="1.0")
+        etree.SubElement(ps,"param",name="laneCapacity",value=str(lane_capacity))
+        etree.SubElement(ps,"param",name="lanes",value=str(lanes))
+        etree.SubElement(ps,"param",name="oneway",value=str(oneway).lower())
+        etree.SubElement(ps,"param",name="osmKey",value="highway")
+        etree.SubElement(ps,"param",name="osmValue",value=osm_value)
+
     # --- 1. Fix bus subnetwork ----------------------------------------
     for subnet in osm_module.xpath('parameterset[@type="routableSubnetwork"]'):
         allowed = get_param("allowedTransportModes", subnet)
@@ -92,7 +108,23 @@ def execute(context):
                     way_speed = get_param("freespeed", way)
                     way_speed.set("value", str(freespeed))
 
-    # --- 3. Set scalar parameters -------------------------------------
+    # --- 3. Add Candidate Bicycle infrastructure -------------------------------------
+    BIKE_FREESPEED = 20.0 / 3.6  # m/s
+
+    add_way_default(
+        osm_value="cycleway",
+        allowed_modes="bike",
+        freespeed=BIKE_FREESPEED,
+    )
+
+    add_way_default(
+        osm_value="bike_suited",
+        allowed_modes="bike",
+        freespeed=BIKE_FREESPEED,
+    )
+
+ 
+    # --- 4. Set scalar parameters -------------------------------------
     set_param("osmFile", network_file)
     set_param("outputCoordinateSystem", "epsg:2056")
     set_param("outputNetworkFile", "%s/converted_network.xml.gz" % context.path())
@@ -102,7 +134,7 @@ def execute(context):
     if export_detailed_network:
         set_param("outputDetailedLinkGeometryFile", detailed_network_file)
         
-    # --- 4. Add new routableSubnetworks safely ------------------------
+    # --- 5. Add new routableSubnetworks safely ------------------------
     new_subnetworks = [
         {"allowedTransportModes": "car", "subnetworkMode": "car_passenger"},
         {"allowedTransportModes": "car", "subnetworkMode": "truck"},
@@ -114,7 +146,7 @@ def execute(context):
         etree.SubElement(ps, "param", name="allowedTransportModes", value=sn["allowedTransportModes"])
         etree.SubElement(ps, "param", name="subnetworkMode", value=sn["subnetworkMode"])
 
-    # --- 5. Write back, preserving XML declaration + DOCTYPE ----------
+    # --- 6. Write back, preserving XML declaration + DOCTYPE ----------
     etree.indent(tree, space="    ")
     tree.write(
         output_path,

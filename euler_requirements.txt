@@ -35,8 +35,8 @@ contextily==1.7.0
 pyarrow==21.0.0
 pydeck==0.9.1
 h3==4.4.2
-torch==2.11.0+cpu
+#torch==2.11.0+cpu
 xgboost==3.1.2
 polars==1.32.3
 igraph==1.0.0
-statsmodels=0.14.6
+statsmodels==0.14.6
