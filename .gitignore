@@ -28,3 +28,29 @@ ch_cutter
 *.csv
 main*.py
 .claude
+
+# added by Joris
+*.xml.gz
+*.csv.gz
+*.jar
+*.out
+*.err
+*.xlsx
+
+# Large geospatial data
+*.osm
+*.osm.gz
+*.pbf
+
+# Shapefiles and associated files
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.qix
+*.sbn
+*.sbx
+
+# GeoPackages, if applicable
+*.gpkg
