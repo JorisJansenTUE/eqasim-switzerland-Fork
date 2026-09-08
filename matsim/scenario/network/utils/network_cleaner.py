@@ -543,6 +543,6 @@ class networkCleaner():
             empty.sum(),
         )
 
-        df = df.loc[~empty].copy()
+        df = df.loc[~empty].copy().reset_index(drop=True)
 
         return df
