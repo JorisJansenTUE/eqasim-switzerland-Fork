@@ -422,12 +422,10 @@ class networkCleaner():
             if highway in {
                 "primary",
                 "primary_link",
-                "secondary",
-                "secondary_link",
             }:
                 maxspeed = get_maxspeed_kmh(row, attrs)
 
-                if maxspeed is not None and maxspeed > 60:
+                if maxspeed is not None and maxspeed > 70:
                     return False
 
                 return True
@@ -442,6 +440,8 @@ class networkCleaner():
                 "unclassified",
                 "residential",
                 "living_street",
+                "secondary",
+                "secondary_link",
             }:
                 return True
 
