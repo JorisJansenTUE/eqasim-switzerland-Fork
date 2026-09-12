@@ -48,6 +48,9 @@ config:
   # traffic-light matching.
   export_detailed_network: true
 
+  # CMDP has manual Geneva/Lausanne OSM speed correction files.
+  # These are not relevant/available for our Locarno network.
+  correct_osm_speeds: false
 
   # ----------------------------------------------------------
   # Bicycle network
