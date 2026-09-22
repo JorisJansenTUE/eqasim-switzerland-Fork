@@ -23,13 +23,13 @@ cd /home/20201733/locarno_ETH_Model
 
 JAR="switzerland_run.jar"
 
-NEW_NETWORK="cut_scenario/mapped_network.xml.gz"
+NEW_NETWORK="locarno_new_cut/mapped_network_bike_fixed.xml.gz"
 
-ORIGINAL_POPULATION="locarno_population.xml.gz"
-ORIGINAL_FACILITIES="locarno_facilities.xml.gz"
+ORIGINAL_POPULATION="old_locarno_cut/locarno_population.xml.gz"
+ORIGINAL_FACILITIES="old_locarno_cut/locarno_facilities.xml.gz"
 
 RELINK_DIR="relinked"
-CUT_DIR="locarno_new_cut"
+CUT_DIR="baseline"
 
 UNROUTED_POPULATION="${RELINK_DIR}/locarno_population_unrouted.xml.gz"
 
@@ -38,6 +38,7 @@ RELINKED_CUTTER_CONFIG="locarno_cutter_relinked_config.xml"
 
 CUT_SHAPE="shapes/Locarno_Agglomeration_200m.shp"
 
+rm -rf "${RELINK_DIR}"
 mkdir -p "${RELINK_DIR}"
 
 echo "============================================================"
@@ -102,15 +103,15 @@ echo "============================================================"
 cp "${BASE_CUTTER_CONFIG}" "${RELINKED_CUTTER_CONFIG}"
 
 sed -i \
-  's|value="cut_scenario/mapped_network.xml.gz"|value="relinked/full_network.xml.gz"|' \
+  's|value="locarno_new_cut/mapped_network_bike_fixed.xml.gz"|value="relinked/full_network.xml.gz"|' \
   "${RELINKED_CUTTER_CONFIG}"
 
 sed -i \
-  's|value="locarno_population.xml.gz"|value="relinked/locarno_population.xml.gz"|' \
+  's|value="old_locarno_cut/locarno_population.xml.gz"|value="relinked/locarno_population.xml.gz"|' \
   "${RELINKED_CUTTER_CONFIG}"
 
 sed -i \
-  's|value="locarno_facilities.xml.gz"|value="relinked/locarno_facilities.xml.gz"|' \
+  's|value="old_locarno_cut/locarno_facilities.xml.gz"|value="relinked/locarno_facilities.xml.gz"|' \
   "${RELINKED_CUTTER_CONFIG}"
   
   
