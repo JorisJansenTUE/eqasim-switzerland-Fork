@@ -5,7 +5,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=24
 #SBATCH --mem=256G
-#SBATCH --time=5:00:00
+#SBATCH --time=3:00:00
 #SBATCH --output=locarno_baseline_%j.out
 #SBATCH --error=locarno_baseline_%j.err
 
@@ -20,4 +20,4 @@ cd /home/20201733/locarno_ETH_Model
 java -Xmx210G \
   -cp switzerland_run.jar \
   org.eqasim.switzerland.ch_cmdp.RunSimulation \
-  --config-path baseline/locarno_run_config.xml
+  --config-path REV_cut/locarno_config.xml
