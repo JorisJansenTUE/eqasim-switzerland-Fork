@@ -34,7 +34,7 @@ PYTHON_VENV="$PIPELINE_REPO/.venv"
 
 # Existing, complete and VALID ETH scenario configuration (Swiss model).
 ETH_CONFIG="/home/20201733/lucarno/lucarno_config.xml"   # EDIT
-SHAPE="/home/20201733/locarno_ETH_Model/shapes/REV_cintura_project.shp"           # EDIT
+SHAPE="/home/20201733/locarno_ETH_Model/shapes/REV_Cintura_project.shp"           # EDIT
 
 # Optionally set a specific mapped-network XML/XML.GZ to bypass discovery.
 # Leave empty to discover it within synpp's mapped-stage cache.
