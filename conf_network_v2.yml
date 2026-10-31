@@ -2,7 +2,7 @@
 # Pipeline
 # ------------------------------------------------------------
 
-working_directory: /home/20201733/eqasim_cache/network_final_70
+working_directory: /home/20201733/eqasim_cache/network_freeze
 
 dryrun: false
 
