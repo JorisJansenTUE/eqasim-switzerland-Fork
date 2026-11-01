@@ -168,7 +168,7 @@ for f in "$FIRST_CONFIG" "$FIRST_POP" "$FIRST_FAC"; do require_file "$f"; done
 if [[ "$RUN_SYNPP" == 1 ]]; then
     log "STEP 2/6: Rebuild Swiss mapped network with synpp"
     setup_python
-    (cd "$PIPELINE_REPO" && python -m synpp "$PIPELINE_CONFIG")
+    (cd "$PIPELINE_REPO" && python -m synpp "$PIPELINE_CONFIG") 2>&1 | tee "$RUN_DIR/synpp.log"
     deactivate
     # Return to Java 25 environment for processing MATSim XML files.
     setup_java
@@ -178,26 +178,15 @@ fi
 # Synpp names each stage cache with a configuration-specific hash.
 # Never rename the cache folder. Resolve the actual network XML within it.
 if [[ -z "$MAPPED_NETWORK" ]]; then
-    [[ -d "$SYNPP_CACHE_DIR" ]] || \
-        fail "Synpp cache directory not found: $SYNPP_CACHE_DIR (set it to working_directory in the yml)"
+    # Identify the exact mapped-network stage from the current synpp run
+    STAGE_NAME="$(grep -oE 'matsim[.]scenario[.]network[.]mapped__[[:xdigit:]]+' \
+        "$RUN_DIR/synpp.log" | tail -1 || true)"
 
-    mapfile -t MAPPED_CACHE_DIRS < <(find "$SYNPP_CACHE_DIR" -maxdepth 1 -type d \
-        -name 'matsim.scenario.network.mapped__*.cache' | sort)
-    if [[ ${#MAPPED_CACHE_DIRS[@]} -ne 1 ]]; then
-        printf 'Mapped-stage cache candidates (%s):\n' "${#MAPPED_CACHE_DIRS[@]}" >&2
-        printf '  %s\n' "${MAPPED_CACHE_DIRS[@]}" >&2
-        fail "Expected exactly one mapped-stage cache; choose explicitly if multiple hashes exist."
-    fi
+    [[ -n "$STAGE_NAME" ]] || fail "Could not identify mapped-network stage from synpp log"
 
-    mapfile -t NETWORK_FILES < <(find "${MAPPED_CACHE_DIRS[0]}" -type f \
-        \( -name '*.xml' -o -name '*.xml.gz' \) | sort)
-    if [[ ${#NETWORK_FILES[@]} -ne 1 ]]; then
-        printf 'XML candidate files (%s):\n' "${#NETWORK_FILES[@]}" >&2
-        printf '  %s\n' "${NETWORK_FILES[@]}" >&2
-        fail "Could not uniquely identify a mapped-network XML. Inspect this cache, then set MAPPED_NETWORK explicitly."
-    fi
-    MAPPED_NETWORK="${NETWORK_FILES[0]}"
+    MAPPED_NETWORK="$SYNPP_CACHE_DIR/${STAGE_NAME}.cache/mapped_network.xml.gz"
 fi
+
 require_file "$MAPPED_NETWORK"
 log "Mapped network: $MAPPED_NETWORK"
 
