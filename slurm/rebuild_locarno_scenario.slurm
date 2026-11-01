@@ -29,7 +29,7 @@ trap 'echo "[$(date "+%F %T")] ERROR at line $LINENO (exit $?)" >&2' ERR
 # ------------------------------ PATHS ---------------------------------
 JAVA_REPO="/home/20201733/eqasim-java-Fork"
 PIPELINE_REPO="/home/20201733/eqasim-switzerland-Fork"
-PIPELINE_CONFIG="$PIPELINE_REPO/Conf_network_v2.yml"
+PIPELINE_CONFIG="$PIPELINE_REPO/conf_network_v2.yml"
 PYTHON_VENV="$PIPELINE_REPO/.venv"
 
 # Existing, complete and VALID ETH scenario configuration (Swiss model).

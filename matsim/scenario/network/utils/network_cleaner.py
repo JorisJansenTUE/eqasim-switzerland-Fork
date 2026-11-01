@@ -334,7 +334,7 @@ class networkCleaner():
 
         # Optional manual corrections for known OSM errors.
         # Use OSM way IDs as strings.
-        FORCE_BIKE_WAYS = set()
+        FORCE_BIKE_WAYS = {"231810537", "477735475", "36920752"}
         FORCE_NO_BIKE_WAYS = set()
 
         def get_attributes(row):
