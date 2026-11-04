@@ -17,7 +17,11 @@ module load Java/21.0.7
 
 cd /home/20201733/locarno_ETH_Model
 
+echo "Running on: $(hostname)"
+echo "Allocated CPUs: ${SLURM_CPUS_PER_TASK}"
+echo "Starting simulation: $(date)"
+
 java -Xmx210G \
-  -cp switzerland_run.jar \
+  -cp REV_v2_run.jar \
   org.eqasim.switzerland.ch_cmdp.RunSimulation \
-  --config-path REV_cut/locarno_config.xml
+  --config-path REV_cut/REV_router_v2_config.xml

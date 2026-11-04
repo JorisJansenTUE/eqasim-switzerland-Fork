@@ -10,7 +10,7 @@
 #SBATCH --error=locarno_rebuild_%j.err
 
 set -Eeuo pipefail
-trap 'echo "[$(date "+%F %T")] ERROR at line $LINENO (exit $?)" >&2' ERR
+trap 'status=$?; echo "[$(date "+%F %T")] ERROR at line $LINENO (exit $status)" >&2' ERR
 
 # ======================================================================
 # LOCARNO / REV-CINTURA: TWO-CUT REBUILD
@@ -38,7 +38,9 @@ SHAPE="/home/20201733/locarno_ETH_Model/shapes/REV_Cintura_project.shp"         
 
 # Optionally set a specific mapped-network XML/XML.GZ to bypass discovery.
 # Leave empty to discover it within synpp's mapped-stage cache.
-MAPPED_NETWORK=""
+MAPPED_NETWORK="/home/20201733/locarno_ETH_Model/Updated_network/mapped_network.xml.gz"
+PT_SCHEDULE="/home/20201733/locarno_ETH_Model/Updated_network/mapped_schedule.xml.gz"
+PT_VEHICLES="/home/20201733/locarno_ETH_Model/Updated_network/transit_vehicles.xml.gz"
 
 # Set to the `working_directory:` from Conf_network_v2.yml.
 # Override if your pipeline config uses a different cache location.
@@ -52,16 +54,19 @@ RUN_ROOT="/home/20201733/locarno_ETH_Model/rebuilds"
 FIRST_PREFIX="eth_rev_"
 FINAL_PREFIX="locarno_"
 
+# Default eqasim configurator for all Java processes
+export eqasim_configurator="org.eqasim.switzerland.ch_cmdp.SwitzerlandConfigurator"
+
 # ------------------------- OPTIONAL SWITCHES -------------------------
-BUILD_JAR=1        # 1 = Maven build first; 0 = reuse existing Switzerland JAR
-RUN_SYNPP=1        # 1 = run Conf_network_v2.yml; 0 = use existing mapped network
+BUILD_JAR=0        # 1 = Maven build first; 0 = reuse existing Switzerland JAR
+RUN_SYNPP=0        # 1 = run Conf_network_v2.yml; 0 = use existing mapped network
 
 THREADS="${SLURM_CPUS_PER_TASK:-24}"
 HEAP="200G"       # headroom left for native memory and the OS
 MAVEN_HOME="$HOME/software/apache-maven-3.9.6"
 
 # Custom utility. Update only if you used another package or CLI.
-UNROUTE_MAIN="org.eqasim.switzerland.thesis.UnroutePopulation"
+UNROUTE_MAIN="org.thesis.UnroutePopulation"
 
 # -------------------------- DIRECTORIES ------------------------------
 JOB_TAG="${SLURM_JOB_ID:-manual_$(date +%Y%m%d_%H%M%S)}"
@@ -74,6 +79,47 @@ mkdir -p "$RUN_DIR" "$STAGE_DIR"
 log() { echo "[$(date '+%F %T')] $*"; }
 fail() { echo "ERROR: $*" >&2; exit 1; }
 require_file() { [[ -s "$1" ]] || fail "Missing/empty file: $1"; }
+
+ETH_DIR="$(dirname "$ETH_CONFIG")"
+
+AUX_FILES=(
+    calibrated_dmc_parameters.yml
+    dmc_parameters.yml
+    cost_parameters.yml
+    cantonal_target_mode_shares.csv
+    global_target_mode_shares.csv
+    gtfs_zones.csv
+    lucarno_network_geometry.csv
+    pricingDescription.xml
+    SBB_all_distances.csv
+    network_calibration_files
+)
+
+setup_aux_files() {
+    local mode="$1"        # link or copy
+    local target_dir="$2"
+    local source_dir
+    source_dir="$(dirname "$ETH_CONFIG")"
+
+    mkdir -p "$target_dir"
+
+    for file in "${AUX_FILES[@]}"; do
+        require_file_or_dir="$source_dir/$file"
+
+        [[ -e "$require_file_or_dir" ]] || fail "Missing ETH resource: $require_file_or_dir"
+
+        # Preserve any existing files
+        [[ -e "$target_dir/$file" || -L "$target_dir/$file" ]] && continue
+
+        if [[ "$mode" == "link" ]]; then
+            ln -s "$source_dir/$file" "$target_dir/$file"
+        else
+            cp -a "$source_dir/$file" "$target_dir/"
+        fi
+    done
+
+    log "ETH auxiliary resources: $mode -> $target_dir"
+}
 
 run_java() {
     java -Xmx"$HEAP" -XX:ActiveProcessorCount="$THREADS" -cp "$JAR" "$@"
@@ -134,17 +180,21 @@ setup_java
 # ------------------------- 0. COMPILE JAR ----------------------------
 if [[ "$BUILD_JAR" == 1 ]]; then
     log "STEP 0/6: Build Switzerland JAR (Java 25 / Maven 3.9.6)"
-    (cd "$JAVA_REPO" && mvn -B -pl switzerland -am -DskipTests package)
+    (cd "$JAVA_REPO" && mvn -B -pl switzerland -am clean package -Pstandalone -DskipTests -T 8)
 fi
 
-# Choose the most recently built runnable jar (exclude sources/original).
-JAR="$(find "$JAVA_REPO/switzerland/target" -maxdepth 1 -type f \
-    -name 'switzerland-*.jar' ! -name '*-sources.jar' \
-    ! -name '*-javadoc.jar' ! -name 'original-*' \
-    -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)"
-[[ -n "$JAR" ]] || fail "No runnable Switzerland jar in $JAVA_REPO/switzerland/target"
+# Use the standalone Switzerland JAR
+JAR="$JAVA_REPO/switzerland/target/switzerland.jar"
+
 require_file "$JAR"
 log "Using JAR: $JAR"
+ls -lh "$JAR"
+
+# Verify that the cutter is included
+if ! jar tf "$JAR" | grep -Fx \
+    'org/eqasim/core/scenario/cutter/RunScenarioCutter.class' >/dev/null; then
+    fail "RunScenarioCutter is missing from $JAR"
+fi
 
 # ------------------------ 1. FIRST ETH CUT ---------------------------
 # Uses ORIGINAL ETH network, facilities, population and PT from ETH_CONFIG.
@@ -155,14 +205,13 @@ run_java org.eqasim.core.scenario.cutter.RunScenarioCutter \
     --extent-path "$SHAPE" \
     --output-path "$FIRST_CUT" \
     --prefix "$FIRST_PREFIX" \
-    --threads "$THREADS" \
-    --skip-routing true
+    --threads "$THREADS"
 
 FIRST_CONFIG="$FIRST_CUT/${FIRST_PREFIX}config.xml"
 FIRST_POP="$FIRST_CUT/${FIRST_PREFIX}population.xml.gz"
 FIRST_FAC="$FIRST_CUT/${FIRST_PREFIX}facilities.xml.gz"
 for f in "$FIRST_CONFIG" "$FIRST_POP" "$FIRST_FAC"; do require_file "$f"; done
-
+setup_aux_files copy "$FIRST_CUT"
 # ------------------------ 2. SYNPP NETWORK ---------------------------
 # ------------------------ 2. SYNPP NETWORK ---------------------------
 if [[ "$RUN_SYNPP" == 1 ]]; then
@@ -191,13 +240,14 @@ require_file "$MAPPED_NETWORK"
 log "Mapped network: $MAPPED_NETWORK"
 
 # ------------------------ 3. UNROUTE POPULATION ----------------------
-# IMPORTANT: This class is custom. Its --input-path / --output-path
-# argument names must match your actual UnroutePopulation.java main().
 UNROUTED_POP="$STAGE_DIR/population_unrouted.xml.gz"
+
 log "STEP 3/6: Clear old routes from first-cut population"
+
 run_java "$UNROUTE_MAIN" \
-    --input-path "$FIRST_POP" \
-    --output-path "$UNROUTED_POP"
+    "$FIRST_POP" \
+    "$UNROUTED_POP"
+
 require_file "$UNROUTED_POP"
 
 # ------------------------ 4. RELINK ----------------------------------
@@ -228,6 +278,9 @@ run_java org.eqasim.core.scenario.routing.RunPopulationRouting \
     --config:network.inputNetworkFile "$PREP_NET" \
     --config:facilities.inputFacilitiesFile "$PREP_FAC" \
     --config:plans.inputPlansFile "$PREP_POP" \
+    --config:transit.transitScheduleFile "$PT_SCHEDULE" \
+    --config:transit.vehiclesFile "$PT_VEHICLES" \
+    --config:routing.networkRouteConsistencyCheck disable \
     --output-path "$ROUTED_POP" \
     --threads "$THREADS"
 require_file "$ROUTED_POP"
@@ -243,6 +296,8 @@ run_java org.eqasim.core.scenario.cutter.RunScenarioCutter \
     --config:network.inputNetworkFile "$PREP_NET" \
     --config:facilities.inputFacilitiesFile "$PREP_FAC" \
     --config:plans.inputPlansFile "$ROUTED_POP" \
+    --config:transit.transitScheduleFile "$PT_SCHEDULE" \
+    --config:transit.vehiclesFile "$PT_VEHICLES" \
     --extent-path "$SHAPE" \
     --output-path "$FINAL_CUT" \
     --prefix "$FINAL_PREFIX" \
@@ -253,6 +308,7 @@ FINAL_NET="$FINAL_CUT/${FINAL_PREFIX}network.xml.gz"
 FINAL_POP="$FINAL_CUT/${FINAL_PREFIX}population.xml.gz"
 FINAL_FAC="$FINAL_CUT/${FINAL_PREFIX}facilities.xml.gz"
 for f in "$FINAL_CONFIG" "$FINAL_NET" "$FINAL_POP" "$FINAL_FAC"; do require_file "$f"; done
+setup_aux_files copy "$FINAL_CUT"
 
 # A second cut can alter the retained population; report the size difference.
 count_people() {
